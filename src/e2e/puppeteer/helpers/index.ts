@@ -1,96 +1,56 @@
 import { Page } from 'puppeteer'
-import partialWithRef from '../../../test-helpers/partialWithRef'
 // helpers
-import $ from './$'
-import click from './click'
-import clickBullet from './clickBullet'
+// import $ from './$'
+// import click from './click'
+// import clickBullet from './clickBullet'
 import clickThought from './clickThought'
-import down from './down'
-import dragAndDrop from './dragAndDrop'
-import dragAndDropThought from './dragAndDropThought'
-import getComputedColor from './getComputedColor'
-import getEditable from './getEditable'
-import getEditingText from './getEditingText'
-import getPage from './getPage'
-import getSelection from './getSelection'
-import newThought from './newThought'
-import openModal from './openModal'
-import paste from './paste'
-import press from './press'
-import refresh from './refresh'
-import remove from './remove'
-import removeHUD from './removeHUD'
-import screenshot from './screenshot'
-import scroll from './scroll'
-import setup from './setup'
-import simulateDragAndDrop from './simulateDragAndDrop'
-import type from './type'
-import waitForContextHasChildWithValue from './waitForContextHasChildWithValue'
-import waitForEditable from './waitForEditable'
-import waitForHiddenEditable from './waitForHiddenEditable'
-import waitForState from './waitForState'
-import waitForThoughtExistInDb from './waitForThoughtExistInDb'
-import waitUntil from './waitUntil'
 
-async function pasteOverload(text: string): Promise<void>
-async function pasteOverload(pathUnranked: string[], text: string): Promise<void>
-/** Parameter<...> doesn't handle function overload afaik, so we need to fix the types manually before exporting. */
-async function pasteOverload(pathUnranked: string | string[], text?: string): Promise<void> {
-  /** */
-}
+// import down from './down'
+// import dragAndDrop from './dragAndDrop'
+// import dragAndDropThought from './dragAndDropThought'
+// import getComputedColor from './getComputedColor'
+// import getEditable from './getEditable'
+// import getEditingText from './getEditingText'
+// import getPage from './getPage'
+// import getSelection from './getSelection'
+// import newThought from './newThought'
+// import openModal from './openModal'
+// import paste from './paste'
+// import press from './press'
+// import refresh from './refresh'
+// import remove from './remove'
+// import removeHUD from './removeHUD'
+// import screenshot from './screenshot'
+// import scroll from './scroll'
+// import simulateDragAndDrop from './simulateDragAndDrop'
+// import type from './type'
+// import waitForContextHasChildWithValue from './waitForContextHasChildWithValue'
+// import waitForEditable from './waitForEditable'
+// import waitForHiddenEditable from './waitForHiddenEditable'
+// import waitForState from './waitForState'
+// import waitForThoughtExistInDb from './waitForThoughtExistInDb'
+// import waitUntil from './waitUntil'
 
-const helpers = {
-  $,
-  click,
-  clickBullet,
+const helperCreators = {
   clickThought,
-  down,
-  getComputedColor,
-  getEditable,
-  getEditingText,
-  getPage,
-  getSelection,
-  newThought,
-  openModal,
-  paste,
-  press,
-  remove,
-  removeHUD,
-  refresh,
-  screenshot,
-  scroll,
-  type,
-  waitForContextHasChildWithValue,
-  waitForEditable,
-  waitUntil,
-  waitForHiddenEditable,
-  waitForState,
-  waitForThoughtExistInDb,
-  simulateDragAndDrop,
-  dragAndDropThought,
-  dragAndDrop,
+  // TODO: convert and add the rest
 }
 
-/** Setup up the Page instance for all helpers and returns an index of test helpers with the Page instance partially applied. Passes arguments to the setup function. */
-const index = <T extends any[]>(...setupArgs: T) => {
-  const pageRef = {} as { current?: Page }
-  const index = partialWithRef(pageRef, helpers)
+type HelperCreators = typeof helperCreators
 
-  beforeEach(async () => {
-    pageRef.current = await setup(...setupArgs)
-  }, 60000)
+export type Helpers = {
+  [K in keyof HelperCreators]: ReturnType<HelperCreators[K]>
+}
 
-  afterEach(async () => {
-    if (pageRef.current) {
-      await pageRef.current.close().catch(() => {
-        // Ignore errors when closing the page.
-      })
-    }
+/** Creates helpers for the given page. */
+const createHelpers = (page: Page): Helpers => {
+  const helperKeys = Object.keys(helperCreators) as (keyof HelperCreators)[]
+  const helpers = {} as Helpers
+  helperKeys.forEach(key => {
+    helpers[key] = helperCreators[key](page)
   })
 
-  return index as typeof index & {
-    paste: typeof pasteOverload
-  }
+  return helpers
 }
 
-export default index
+export default createHelpers
