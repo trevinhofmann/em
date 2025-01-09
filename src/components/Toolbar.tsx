@@ -8,7 +8,8 @@ Test:
   - Overlay hidden on touch "leave"
 
 */
-import { Haptics } from '@capacitor/haptics'
+import { Capacitor } from '@capacitor/core'
+import { Haptics, ImpactStyle } from '@capacitor/haptics'
 import React, { FC, useCallback, useEffect, useRef, useState } from 'react'
 import { shallowEqual, useDispatch, useSelector } from 'react-redux'
 import { css, cva, cx } from '../../styled-system/css'
@@ -87,6 +88,7 @@ const Toolbar: FC<ToolbarProps> = ({ customize, onSelect, selected }) => {
   // track scrollLeft after each touchend
   // this is used to reset pressingToolbarId when the user has scrolled at least 5px
   const lastScrollLeft = useRef<number>(0)
+  const lastHapticScrollPosition = useRef<number>(0)
   const toolbarContainerRef = useRef<HTMLDivElement>(null)
   const toolbarRef = useRef<HTMLDivElement>(null)
   const [leftArrowIsShown, setLeftArrowIsShown] = useState(false)
@@ -136,15 +138,19 @@ const Toolbar: FC<ToolbarProps> = ({ customize, onSelect, selected }) => {
   /** Handles toolbar scroll event. */
   const onScroll = useCallback(
     (e: React.UIEvent<HTMLElement>) => {
-      let lastScrollY = 0
       const scrollDifference = e.target ? Math.abs(lastScrollLeft.current - (e.target as HTMLElement).scrollLeft) : 0
       if (scrollDifference >= 5) {
         deselectPressingToolbarId()
       }
-      const currentScrollY = (e.target as HTMLElement).scrollLeft
-      if (Math.abs(currentScrollY - lastScrollY) >= 50) {
-        Haptics.selectionChanged()
-        lastScrollY = currentScrollY
+      const hapticScrollDifference = e.target
+        ? Math.abs(lastHapticScrollPosition.current - (e.target as HTMLElement).scrollLeft)
+        : 0
+      if (hapticScrollDifference >= 50) {
+        if (Capacitor.isNativePlatform()) {
+          Haptics.impact({ style: ImpactStyle.Light })
+          // Haptics.selectionChanged()
+        }
+        lastHapticScrollPosition.current = (e.target as HTMLElement).scrollLeft
       }
 
       updateArrows()
