@@ -13,11 +13,11 @@ const storageModel = storage.model({
   feedbackEmail: { default: '' },
   // debug background glow overlay behind the thoughtspace (see BackgroundGlow)
   backgroundGlow: {
-    default: { image: null, opacity: 0.6 } as BackgroundGlowStorageType,
+    default: { image: null, opacity: 0.4 } as BackgroundGlowStorageType,
     // spread over the defaults so values stored before a field was added fall back to that field's default
     decode: (s: string | null): BackgroundGlowStorageType => ({
       image: null,
-      opacity: 0.6,
+      opacity: 0.4,
       ...(s ? (JSON.parse(s) as Partial<BackgroundGlowStorageType>) : null),
     }),
     encode: (value: BackgroundGlowStorageType) => JSON.stringify(value),
