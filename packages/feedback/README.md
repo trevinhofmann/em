@@ -3,6 +3,8 @@
 Private feedback collection for em, implemented as an Express app deployed to Vercel like `packages/ai`.
 Users can submit anonymously, optionally identify themselves, attach files, and explicitly include selected thoughts,
 display resolution, or a debug log. There is no triage UI, classification, or notification service.
+Submissions are currently open with basic rate limiting; application authentication is deferred.
+Production and preview apps both submit to the production feedback service and share its maintainer inbox.
 
 ## One-time setup
 
@@ -11,18 +13,19 @@ Complete this before merging the deployment workflow changes. No resources are p
 1. Create a Vercel project named **em-feedback**, connected to this repository. Set its Root Directory to
    `packages/feedback`, enable **Include files outside of the Root Directory**, and select the **Express** framework.
    Leave Build Command and Output Directory overrides off. Vercel bundles the exported Express app as a Function;
-   this package intentionally has no static build script. Disable Deployment Protection for Production and Preview
+   this package intentionally has no static build script. Disable Deployment Protection for Production
    so anonymous clients can reach it. `vercel.json` disables Vercel Git deployments because GitHub Actions owns deployment.
-2. Provision **Neon Postgres** through Vercel Marketplace. Set `DATABASE_URL` in the feedback project's environment.
+2. Provision **Neon Postgres** through Vercel Marketplace. Set `DATABASE_URL` in the feedback project's Production environment.
    Apply [schema.sql](schema.sql) through Neon's SQL editor or `psql "$DATABASE_URL" -f schema.sql`.
-3. Create a **private** Vercel Blob store for the project. Connect its `BLOB_READ_WRITE_TOKEN` environment variable.
+3. Create a **private** Vercel Blob store for the project. Connect its `BLOB_READ_WRITE_TOKEN` to the Production environment.
    Public stores are not supported; the service verifies that finalized attachments reside in a private store.
 4. Generate separate random server secrets for `FEEDBACK_READ_SECRET` and `CRON_SECRET`, for example with
-   `openssl rand -hex 32`. Set both in the Vercel project. Never put these or database/Blob credentials in `VITE_*`
-   variables. The first authorizes read-only maintainer access; the second authorizes abandoned-upload cleanup.
-5. **Use separate databases, Blob stores, and secrets for Production and Preview.** Apply the schema to both databases.
-   Preview builds execute approved PR code and must never receive access to production feedback. Preview deployments
-   share the preview resources, so only use test submissions there.
+   `openssl rand -hex 32`. Set both in the Vercel project's Production environment. Never put these or database/Blob
+   credentials in `VITE_*` variables. The first authorizes read-only maintainer access; the second authorizes abandoned-upload cleanup.
+5. **Use one production feedback backend for both production and preview apps.** There is no feedback preview
+   deployment, database, or Blob store to provision. Preview submissions and attachments appear alongside production
+   feedback. Keep all backend credentials scoped to Production; preview frontends receive only the public submission
+   URL, and maintainer reads still require `FEEDBACK_READ_SECRET`.
 6. Under the feedback project's **Firewall → Configure → New Rule**, configure two API-controlled rate-limit rules:
 
    | Rate Limit ID          | Fixed window                              | Action                  |
@@ -32,19 +35,21 @@ Complete this before merging the deployment workflow changes. No resources are p
 
    Use the `@vercel/firewall` condition and the exact IDs above, as for `ai-api` in the AI project. Review and publish
    the rules. Reservation requests use the first rule; upload-token requests and finalization use the second. Failed
-   attempts and retries count toward these limits. Production and Preview reject writes with 503 if the firewall
-   check fails; local development does not call Vercel Firewall. These are abuse controls, not user authentication.
+   attempts and retries count toward these limits. The production service rejects writes with 503 if the firewall
+   check fails or a rule is missing; local development does not call Vercel Firewall. These are abuse controls,
+   not user authentication.
 
 7. Add GitHub Actions secret **`VERCEL_PROJECT_ID_EM_FEEDBACK`** alongside the existing Vercel organization/token
    secrets. Use the project ID from Vercel Settings. The Production workflow deploys all three projects independently
-   on pushes to `main`. The Preview workflow deploys AI and feedback first, checks their health routes, and compiles
-   their deployment URLs into the corresponding web preview.
+   on pushes to `main`. This project ID is needed for automatic production deployment; database, Blob, read, and
+   cleanup credentials stay in Vercel. The Preview workflow deploys only AI and the web app, and points the web
+   preview's `VITE_FEEDBACK_URL` at the production feedback service.
 8. Configure `feedback.emthought.space` as the feedback project's production domain, matching the frontend's
-   `.env.production` `VITE_FEEDBACK_URL=https://feedback.emthought.space/feedback`. If another domain is desired,
-   update that value before building. Enable the daily Vercel Cron defined in `vercel.json` for production.
-   Preview cron jobs do not run: manually call the preview cleanup route when needed using its own `CRON_SECRET`.
+   `.env.production` `VITE_FEEDBACK_URL=https://feedback.emthought.space/feedback` and the same value in
+   `.github/workflows/vercel-preview.yml`. If another domain is desired, update both before building.
+   Enable the daily Vercel Cron defined in `vercel.json` for production; it cleans abandoned uploads from both apps.
 
-PRs use the workflow on the base branch (`pull_request_target`), so the new preview wiring takes effect after merge.
+PRs use the workflow on the base branch (`pull_request_target`), so changes to preview wiring take effect after merge.
 A push to a feature branch without a PR triggers neither production nor preview deployment.
 
 ## Local development
