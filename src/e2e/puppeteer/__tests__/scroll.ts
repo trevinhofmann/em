@@ -805,8 +805,10 @@ describe('iOS momentum', () => {
     await scrollTo(minScrollY + 160)
     await waitForBrowserSettled()
     const gesture = await startGesture({ xStart: 350, yStart: 100 })
-    await gesture.move('d', { segmentLength: 120, stepSize: 40 })
-    expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(minScrollY + 20)
+    await gesture.move('d', { segmentLength: 80, stepSize: 40 })
+    expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(minScrollY + 60)
+    // End with two fresh input samples; the assertion round trip may have outlasted the velocity window.
+    await gesture.move('d', { segmentLength: 40, stepSize: 20 })
     await gesture.end()
     await page.waitForFunction(
       top => {
