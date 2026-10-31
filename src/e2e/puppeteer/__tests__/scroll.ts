@@ -1,6 +1,5 @@
 import { KnownDevices } from 'puppeteer'
 import cursorBackCommand from '../../../commands/cursorBack'
-import configureSnapshots from '../configureSnapshots'
 import clickThought from '../helpers/clickThought'
 import closeKeyboard from '../helpers/closeKeyboard'
 import deviceEmulation from '../helpers/deviceEmulation'
@@ -8,12 +7,10 @@ import gesture, { startGesture } from '../helpers/gesture'
 import getEditingText from '../helpers/getEditingText'
 import getThoughtTop from '../helpers/getThoughtTop'
 import getVisibleThoughtBounds from '../helpers/getVisibleThoughtBounds'
-import hideFooterMetadata from '../helpers/hideFooterMetadata'
 import paste from '../helpers/paste'
 import preloadTestFlags from '../helpers/preloadTestFlags'
 import press from '../helpers/press'
 import refresh from '../helpers/refresh'
-import screenshot from '../helpers/screenshot'
 import scrollTo from '../helpers/scrollTo'
 import waitForBrowserSettled from '../helpers/waitForBrowserSettled'
 import waitForCursor from '../helpers/waitForCursor'
@@ -61,10 +58,6 @@ const OVERSCROLL_DOCUMENT = `
     `
 
 const MOCK_REPLICATION_DELAY = 100
-
-expect.extend({
-  toMatchImageSnapshot: configureSnapshots({ fileName: 'scroll' }),
-})
 
 vi.setConfig({ testTimeout: 60000, hookTimeout: 20000 })
 usePersistentTreecrdtStorage()
@@ -250,8 +243,9 @@ describe('scroll clamp', () => {
     await scrollTo(0)
     await waitForBrowserSettled()
 
-    await hideFooterMetadata()
-    expect(await screenshot()).toMatchImageSnapshot()
+    const { minScrollY } = await getVisibleThoughtBounds()
+    expect(minScrollY).toBeGreaterThan(0)
+    expect(Math.abs((await page.evaluate(() => window.scrollY)) - minScrollY)).toBeLessThan(1)
   })
 
   it('keeps the footer accessible at the bottom scroll limit', async () => {
