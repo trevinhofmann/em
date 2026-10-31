@@ -83,11 +83,11 @@ organization. Keys are server secrets and must never be added to the repository 
 
 Production is deployed by the `Vercel Production` GitHub Actions workflow on every push to `main`. The workflow selects `em-ai` with `VERCEL_PROJECT_ID_EM_AI`, runs `vercel pull`, `vercel build --prod`, and `vercel deploy --prebuilt --prod`.
 
-Pull requests are deployed by the `Vercel Preview` workflow. It deploys `em-ai` first, checks its health route, and
-then builds the matching `em` preview with the generated deployment URL as `VITE_AI_URL` and the production feedback
-URL as `VITE_FEEDBACK_URL`. There is no separate feedback preview backend. The pull request's
-GitHub deployment links to the user-facing `em` preview, while the workflow summary includes the `em-ai` URL for
-diagnostics. Vercel Authentication must remain disabled for preview deployments so the browser can call the API.
+Pull requests are deployed by the `Vercel Preview` workflow. It deploys `em-ai` and `em-feedback`, checks their health
+routes, and then builds the matching `em` preview with their generated deployment URLs as `VITE_AI_URL` and
+`VITE_FEEDBACK_URL`. Feedback preview deployments share the production feedback database and private Blob store.
+The pull request's GitHub deployment links to the user-facing `em` preview, while the workflow summary includes both
+backend URLs for diagnostics. Vercel Authentication must remain disabled for preview deployments so the browser can call the APIs.
 
 Vercel's own Git deployment is disabled in `vercel.json` to prevent duplicate deployments. The repository's `.env.production` sets the AI service base URL to `https://ai.emthought.space/ai`.
 

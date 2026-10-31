@@ -1,4 +1,4 @@
--- Apply once to the production feedback database shared by production and preview apps.
+-- Apply once to the feedback database shared by production and preview service deployments.
 CREATE TABLE IF NOT EXISTS feedback (
   id uuid PRIMARY KEY,
   token_hash text NOT NULL,

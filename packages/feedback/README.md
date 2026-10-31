@@ -4,28 +4,36 @@ Private feedback collection for em, implemented as an Express app deployed to Ve
 Users can submit anonymously, optionally identify themselves, attach files, and explicitly include selected thoughts,
 display resolution, or a debug log. There is no triage UI, classification, or notification service.
 Submissions are currently open with basic rate limiting; application authentication is deferred.
-Production and preview apps both submit to the production feedback service and share its maintainer inbox.
+Production apps submit to the production feedback service; preview apps submit to the matching feedback preview.
+Both service deployments use the same database and private Blob store and share one maintainer inbox.
 
 ## One-time setup
 
 Complete this before merging the deployment workflow changes. No resources are provisioned by installing this package.
 
-1. Create a Vercel project named **em-feedback**, connected to this repository. Set its Root Directory to
+1. Create one Vercel project named **em-feedback**. It can be created before this PR merges with
+   `npx vercel@latest project add em-feedback --scope cybersemics`; GitHub import is optional because GitHub Actions
+   owns deployment. Set its Root Directory to
    `packages/feedback`, enable **Include files outside of the Root Directory**, and select the **Express** framework.
    Leave Build Command and Output Directory overrides off. Vercel bundles the exported Express app as a Function;
-   this package intentionally has no static build script. Disable Deployment Protection for Production
+   this package intentionally has no static build script. Disable Deployment Protection for Production and Preview
    so anonymous clients can reach it. `vercel.json` disables Vercel Git deployments because GitHub Actions owns deployment.
-2. Provision **Neon Postgres** through Vercel Marketplace. Set `DATABASE_URL` in the feedback project's Production environment.
-   Apply [schema.sql](schema.sql) through Neon's SQL editor or `psql "$DATABASE_URL" -f schema.sql`.
-3. Create a **private** Vercel Blob store for the project. Connect its `BLOB_READ_WRITE_TOKEN` to the Production environment.
+2. Provision **Neon Postgres** through Vercel Marketplace. Set the same `DATABASE_URL` in the feedback project's
+   **Production and Preview** environments, pointing to the same Neon branch and database. Do not enable automatic
+   preview database branching for this connection; remove any branch-specific `DATABASE_URL` overrides that select
+   another database. Apply [schema.sql](schema.sql) once through Neon's SQL editor or `psql "$DATABASE_URL" -f schema.sql`.
+3. Create one **private** Vercel Blob store for the project. Connect the same store's `BLOB_READ_WRITE_TOKEN` to
+   **Production and Preview**. In the store's project connection settings, select both environments.
    Public stores are not supported; the service verifies that finalized attachments reside in a private store.
 4. Generate separate random server secrets for `FEEDBACK_READ_SECRET` and `CRON_SECRET`, for example with
    `openssl rand -hex 32`. Set both in the Vercel project's Production environment. Never put these or database/Blob
    credentials in `VITE_*` variables. The first authorizes read-only maintainer access; the second authorizes abandoned-upload cleanup.
-5. **Use one production feedback backend for both production and preview apps.** There is no feedback preview
-   deployment, database, or Blob store to provision. Preview submissions and attachments appear alongside production
-   feedback. Keep all backend credentials scoped to Production; preview frontends receive only the public submission
-   URL, and maintainer reads still require `FEEDBACK_READ_SECRET`.
+5. **Deploy backend previews with shared production storage.** Production and Preview are environments of the same
+   `em-feedback` project; no second Vercel project, database, or Blob store is needed. Each web preview uses its
+   matching feedback backend preview. Preview submissions and attachments appear alongside production feedback.
+   Preview backend code receives the shared storage credentials, so review PR code before approving deployment,
+   including fork PRs. Frontends receive only public backend URLs. Keep `FEEDBACK_READ_SECRET` and `CRON_SECRET`
+   scoped to Production; maintainer reads use the production API, and preview read/cleanup endpoints remain unavailable.
 6. Under the feedback project's **Firewall → Configure → New Rule**, configure two API-controlled rate-limit rules:
 
    | Rate Limit ID          | Fixed window                              | Action                  |
@@ -35,19 +43,23 @@ Complete this before merging the deployment workflow changes. No resources are p
 
    Use the `@vercel/firewall` condition and the exact IDs above, as for `ai-api` in the AI project. Review and publish
    the rules. Reservation requests use the first rule; upload-token requests and finalization use the second. Failed
-   attempts and retries count toward these limits. The production service rejects writes with 503 if the firewall
-   check fails or a rule is missing; local development does not call Vercel Firewall. These are abuse controls,
-   not user authentication.
+   attempts and retries count toward these limits. Ensure the rules apply to both Production and Preview. Enable
+   **Protection Bypass for Automation** and **Automatically expose System Environment Variables** for the Firewall SDK
+   to work in Preview. The bypass secret stays server-side; Deployment Protection must still allow browser calls.
+   Deployed services reject writes with 503 if the firewall check fails or a rule is missing; local development does
+   not call Vercel Firewall. These are abuse controls, not user authentication.
 
 7. Add GitHub Actions secret **`VERCEL_PROJECT_ID_EM_FEEDBACK`** alongside the existing Vercel organization/token
    secrets. Use the project ID from Vercel Settings. The Production workflow deploys all three projects independently
-   on pushes to `main`. This project ID is needed for automatic production deployment; database, Blob, read, and
-   cleanup credentials stay in Vercel. The Preview workflow deploys only AI and the web app, and points the web
-   preview's `VITE_FEEDBACK_URL` at the production feedback service.
+   on pushes to `main`. The Preview workflow uses the same project ID to deploy a feedback preview before building
+   the web app with that preview's URL as `VITE_FEEDBACK_URL`. Database, Blob, read, and cleanup credentials stay in
+   Vercel rather than separate GitHub secrets.
 8. Configure `feedback.emthought.space` as the feedback project's production domain, matching the frontend's
-   `.env.production` `VITE_FEEDBACK_URL=https://feedback.emthought.space/feedback` and the same value in
-   `.github/workflows/vercel-preview.yml`. If another domain is desired, update both before building.
-   Enable the daily Vercel Cron defined in `vercel.json` for production; it cleans abandoned uploads from both apps.
+   `.env.production` `VITE_FEEDBACK_URL=https://feedback.emthought.space/feedback`. If another production domain is
+   desired, update that value before building. Preview URLs are generated by the workflow; no preview custom domain
+   is needed. Make an initial production deployment from this PR's code before testing backend previews. Enable the
+   daily Vercel Cron defined in `vercel.json` for production; it cleans abandoned uploads from both service deployments
+   in the shared database and store. Preview deployments do not schedule cron jobs.
 
 PRs use the workflow on the base branch (`pull_request_target`), so changes to preview wiring take effect after merge.
 A push to a feature branch without a PR triggers neither production nor preview deployment.
@@ -119,7 +131,8 @@ curl --fail --header "Authorization: Bearer $FEEDBACK_READ_SECRET" \
 
 After provisioning, smoke-test the health route, an anonymous text-only reservation and completion, a private file
 upload and authorized download, an unauthorized read (401), and the published firewall limits (429). Then verify a
-frontend submission in a preview. `GET /` is a process health check and does not establish database/Blob readiness.
+frontend submission and attachment through a matching backend preview, and confirm both can be read through the
+production maintainer API. `GET /` is a process health check and does not establish database/Blob readiness.
 
 ## Tests
 
