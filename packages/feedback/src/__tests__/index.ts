@@ -121,6 +121,8 @@ it.each([
 
 it.each([
   ['rate limit exceeded', { rateLimited: true }, 429],
+  ['firewall blocked the request', { rateLimited: true, error: 'blocked' }, 429],
+  ['rate limit rule is missing', { rateLimited: false, error: 'not-found' }, 503],
   ['rate limiter unavailable', new Error('Unavailable'), 503],
 ] as const)('rejects public writes when %s', async (_name, result, status) => {
   if (result instanceof Error) mocks.rateLimit.mockRejectedValueOnce(result)

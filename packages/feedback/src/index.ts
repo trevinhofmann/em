@@ -83,10 +83,11 @@ const route =
 const limit = async (req: Request, rule: string) => {
   if (process.env.NODE_ENV !== 'production') return
   try {
-    const { rateLimited } = await checkRateLimit(rule, {
+    const { rateLimited, error } = await checkRateLimit(rule, {
       headers: req.headers as Record<string, string | string[]>,
     })
     if (rateLimited) throw new HttpError(429, 'Too many requests. Please try again later.')
+    if (error) throw new Error('Feedback rate limit check failed')
   } catch (error) {
     if (error instanceof HttpError) throw error
     throw new HttpError(503, 'Feedback is temporarily unavailable. Please try again later.')
